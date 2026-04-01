@@ -61,7 +61,7 @@ public sealed class GlobalExceptionHandler(
 
         error = Error.Validation(
             "invalid_request_body",
-            "Request body is invalid.",
+            "Request is invalid.",
             new Dictionary<string, string[]>
             {
                 ["Request"] = [badHttpRequestException.Message]

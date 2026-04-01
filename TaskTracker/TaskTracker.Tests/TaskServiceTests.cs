@@ -1,6 +1,7 @@
 using TaskTracker.Models;
 using TaskTracker.Repositories;
 using TaskTracker.Requests;
+using TaskTracker.Responses;
 using TaskTracker.Services;
 using TaskTracker.Validators;
 
@@ -137,8 +138,57 @@ public sealed class TaskServiceTests
         Assert.Equal(TaskItemStatus.Done, updatedEntity.Status);
     }
 
+    [Fact]
+    public async Task GetAllAsync_ReturnsPagedTasks_WhenPaginationIsValid()
+    {
+        var repository = new InMemoryGenericRepository<TaskItem>();
+        repository.Seed(new TaskItem { Id = 1, Title = "Task 1", Status = TaskItemStatus.Todo });
+        repository.Seed(new TaskItem { Id = 2, Title = "Task 2", Status = TaskItemStatus.Todo });
+        repository.Seed(new TaskItem { Id = 3, Title = "Task 3", Status = TaskItemStatus.Todo });
+
+        var service = CreateService(repository);
+
+        var result = await service.GetAllAsync(new GetTasksRequest
+        {
+            PageNumber = 2,
+            PageSize = 1
+        });
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data!.PageNumber);
+        Assert.Equal(1, result.Data.PageSize);
+        Assert.Equal(3, result.Data.TotalCount);
+        Assert.Equal(3, result.Data.TotalPages);
+
+        var item = Assert.Single(result.Data.Items);
+        Assert.Equal(2, item.Id);
+        Assert.True(result.Data.HasPreviousPage);
+        Assert.True(result.Data.HasNextPage);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_ReturnsValidationFailure_WhenPageSizeIsOutOfRange()
+    {
+        var repository = new InMemoryGenericRepository<TaskItem>();
+        var service = CreateService(repository);
+
+        var result = await service.GetAllAsync(new GetTasksRequest
+        {
+            PageNumber = 1,
+            PageSize = 101
+        });
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("validation_error", result.Error?.Code);
+        Assert.Contains("PageSize", result.Error?.Details?.Keys ?? []);
+    }
+
     private static TaskService CreateService(InMemoryGenericRepository<TaskItem> repository) =>
-        new(repository, new UpsertTaskItemRequestValidator());
+        new(
+            repository,
+            new UpsertTaskItemRequestValidator(),
+            new GetTasksRequestValidator());
 
     private sealed class InMemoryGenericRepository<TEntity> : IGenericRepository<TEntity>
         where TEntity : class
@@ -150,6 +200,25 @@ public sealed class TaskServiceTests
 
         public Task<List<TEntity>> GetAllAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(_items.ToList());
+
+        public Task<List<TEntity>> GetPagedAsync<TOrderKey>(
+            int pageNumber,
+            int pageSize,
+            System.Linq.Expressions.Expression<Func<TEntity, TOrderKey>> orderBy,
+            CancellationToken cancellationToken = default)
+        {
+            var keySelector = orderBy.Compile();
+            var items = _items
+                .OrderBy(keySelector)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return Task.FromResult(items);
+        }
+
+        public Task<int> CountAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_items.Count);
 
         public ValueTask<TEntity?> GetByIdAsync(object id, CancellationToken cancellationToken = default)
         {

@@ -34,9 +34,18 @@ public static class TaskEndpoints
 
     private static async Task<IResult> GetTasksAsync(
         ITaskService taskService,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int pageNumber = 1,
+        int pageSize = 10)
     {
-        var result = await taskService.GetAllAsync(cancellationToken);
+        var result = await taskService.GetAllAsync(
+            new GetTasksRequest
+            {
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            },
+            cancellationToken);
+
         return result.ToHttpResult();
     }
 

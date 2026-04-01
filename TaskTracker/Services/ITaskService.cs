@@ -8,7 +8,7 @@ public interface ITaskService
 {
     Task<Result<TaskItemResponse>> CreateAsync(UpsertTaskItemRequest request, CancellationToken cancellationToken = default);
 
-    Task<Result<IReadOnlyCollection<TaskItemResponse>>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<Result<PagedResponse<TaskItemResponse>>> GetAllAsync(GetTasksRequest request, CancellationToken cancellationToken = default);
 
     Task<Result<TaskItemResponse>> GetByIdAsync(int id, CancellationToken cancellationToken = default);
 

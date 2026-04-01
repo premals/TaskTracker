@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using TaskTracker.Data;
 
@@ -10,6 +11,20 @@ public sealed class GenericRepository<TEntity>(TaskTrackerDbContext dbContext) :
 
     public Task<List<TEntity>> GetAllAsync(CancellationToken cancellationToken = default) =>
         _dbSet.AsNoTracking().ToListAsync(cancellationToken);
+
+    public Task<List<TEntity>> GetPagedAsync<TOrderKey>(
+        int pageNumber,
+        int pageSize,
+        Expression<Func<TEntity, TOrderKey>> orderBy,
+        CancellationToken cancellationToken = default) =>
+        _dbSet.AsNoTracking()
+            .OrderBy(orderBy)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+    public Task<int> CountAsync(CancellationToken cancellationToken = default) =>
+        _dbSet.CountAsync(cancellationToken);
 
     public async ValueTask<TEntity?> GetByIdAsync(object id, CancellationToken cancellationToken = default) =>
         await _dbSet.FindAsync([id], cancellationToken);

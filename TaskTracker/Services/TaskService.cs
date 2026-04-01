@@ -10,7 +10,8 @@ namespace TaskTracker.Services;
 
 public sealed class TaskService(
     IGenericRepository<TaskItem> repository,
-    IValidator<UpsertTaskItemRequest> validator) : ITaskService
+    IValidator<UpsertTaskItemRequest> validator,
+    IValidator<GetTasksRequest> getTasksValidator) : ITaskService
 {
     public async Task<Result<TaskItemResponse>> CreateAsync(
         UpsertTaskItemRequest request,
@@ -37,15 +38,35 @@ public sealed class TaskService(
         return Result<TaskItemResponse>.Success(MapToResponse(taskItem), "Task created successfully.");
     }
 
-    public async Task<Result<IReadOnlyCollection<TaskItemResponse>>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<Result<PagedResponse<TaskItemResponse>>> GetAllAsync(
+        GetTasksRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var taskItems = await repository.GetAllAsync(cancellationToken);
-        var response = taskItems
-            .OrderBy(task => task.Id)
+        var validationResult = await getTasksValidator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            return validationResult.ToFailureResult<PagedResponse<TaskItemResponse>>();
+        }
+
+        var totalCount = await repository.CountAsync(cancellationToken);
+        var taskItems = await repository.GetPagedAsync(request.PageNumber, request.PageSize, task => task.Id, cancellationToken);
+        var items = taskItems
             .Select(MapToResponse)
             .ToArray();
 
-        return Result<IReadOnlyCollection<TaskItemResponse>>.Success(response);
+        var totalPages = totalCount == 0
+            ? 0
+            : (int)Math.Ceiling(totalCount / (double)request.PageSize);
+
+        return Result<PagedResponse<TaskItemResponse>>.Success(
+            new PagedResponse<TaskItemResponse>
+            {
+                Items = items,
+                PageNumber = request.PageNumber,
+                PageSize = request.PageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages
+            });
     }
 
     public async Task<Result<TaskItemResponse>> GetByIdAsync(int id, CancellationToken cancellationToken = default)
